@@ -5,7 +5,12 @@
 #include <netinet/ip.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 #include <unistd.h>
+
+#define BUFFER_SIZE 1024
+char *OK_RESPONSE = "HTTP/1.1 200 OK\r\n\r\n";
+char *NOT_FOUND_RESPONSE = "HTTP/1.1 404 Not Found\r\n\r\n";
 
 int main() {
 	// Disable output buffering
@@ -54,11 +59,34 @@ int main() {
 	client_addr_len = sizeof(client_addr);
     
     int fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
+    
+    if ( fd < 0 ) {
+        printf("Connection Failed %s \n", strerror(errno));
+        return 1;
+    }
 
 	printf("Client connected\n");
-    	
-    char *reply = "HTTP/1.1 200 OK\r\n\r\n";
-    int bytes_sent = send(fd, reply, strlen(reply), 0);
+    
+    char request_buffer[BUFFER_SIZE];
+
+    if (read(fd, request_buffer, BUFFER_SIZE) < 0) {
+        printf("Read Failed: %s \n", strerror(errno));
+        return 1;
+    } else {
+        printf("Request from client %s \n", request_buffer);
+    }
+
+    
+
+    char *path = strtok(request_buffer, " ");
+    path = strtok(NULL, " ");
+
+    char *response = (strcmp(path, "/") == 0) ? OK_RESPONSE : NOT_FOUND_RESPONSE;
+
+    if (send(fd, response, strlen(response), 0) < 0) {
+        printf("Error: %s \n", strerror(errno));
+    }
+
 
 	close(server_fd);
 
