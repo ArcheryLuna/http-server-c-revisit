@@ -12,6 +12,69 @@
 char *OK_RESPONSE = "HTTP/1.1 200 OK\r\n\r\n";
 char *NOT_FOUND_RESPONSE = "HTTP/1.1 404 Not Found\r\n\r\n";
 
+void handle_client(int client_socket) {
+    char buffer[BUFFER_SIZE];
+    int bytes_read = read(client_socket, buffer, BUFFER_SIZE);
+    if (bytes_read < 0) {
+        perror("read");
+        close(client_socket);
+        return;
+    }
+    
+    buffer[bytes_read] = '\0';
+    
+    // Simple request parsing to extract the string from URL
+    char *start = strstr(buffer, "GET ");
+    if (start == NULL) {
+        close(client_socket);
+        return;
+    }
+    
+    start += 4; // Move past "GET "
+    char *end = strchr(start, ' ');
+    if (end == NULL) {
+        close(client_socket);
+        return;
+    }
+    
+    int length = end - start;
+    char path[length + 1];
+    strncpy(path, start, length);
+    path[length] = '\0';
+    
+    char response[BUFFER_SIZE];
+    if (strcmp(path, "/") == 0) {
+        // Handle root path
+        sprintf(response, 
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 12\r\n"
+            "\r\n"
+            "Hello, world");
+    } else if (strncmp(path, "/echo/", 6) == 0) {
+        // Handle /echo/{str} path
+        char *echo_string = path + 6;
+        sprintf(response, 
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %ld\r\n"
+            "\r\n"
+            "%s",
+            strlen(echo_string), echo_string);
+    } else {
+        // Handle other paths
+        sprintf(response, 
+            "HTTP/1.1 404 Not Found\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 13\r\n"
+            "\r\n"
+            "404 Not Found");
+    }
+    
+    write(client_socket, response, strlen(response));
+    close(client_socket);
+}
+
 int main() {
 	// Disable output buffering
 	setbuf(stdout, NULL);
@@ -22,7 +85,7 @@ int main() {
 
 	// Uncomment this block to pass the first stage
 	//
-	int server_fd, client_addr_len;
+	int server_fd, client_addr_len, client_socket;
 	struct sockaddr_in client_addr;
 	//
 	server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -55,38 +118,16 @@ int main() {
 	    return 1;
 	}
 	
-	printf("Waiting for a client to connect...\n");
-	client_addr_len = sizeof(client_addr);
-    
-    int fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
-    
-    if ( fd < 0 ) {
-        printf("Connection Failed %s \n", strerror(errno));
-        return 1;
+    while (1) {
+        client_socket = accept(server_fd, (struct sockaddr*)&client_addr, &client_addr_len);
+
+        if (client_socket < 0) {
+            perror("accept");
+            continue;
+        }
+
+        handle_client(client_socket);
     }
-
-	printf("Client connected\n");
-    
-    char request_buffer[BUFFER_SIZE];
-
-    if (read(fd, request_buffer, BUFFER_SIZE) < 0) {
-        printf("Read Failed: %s \n", strerror(errno));
-        return 1;
-    } else {
-        printf("Request from client %s \n", request_buffer);
-    }
-
-    
-
-    char *path = strtok(request_buffer, " ");
-    path = strtok(NULL, " ");
-
-    char *response = (strcmp(path, "/") == 0) ? OK_RESPONSE : NOT_FOUND_RESPONSE;
-
-    if (send(fd, response, strlen(response), 0) < 0) {
-        printf("Error: %s \n", strerror(errno));
-    }
-
 
 	close(server_fd);
 
