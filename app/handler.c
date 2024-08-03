@@ -1,5 +1,4 @@
-// handler.c
-#include "handle_client.h"
+#include "handler.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,8 +65,14 @@ void handle_client(int client_socket) {
             strncpy(encoding, accept_encoding, accept_length);
             encoding[accept_length] = '\0';
 
-            if (strstr(encoding, "gzip")) {
-                supports_gzip = 1;
+            // Check if gzip is one of the supported encodings
+            char *token = strtok(encoding, ", ");
+            while (token != NULL) {
+                if (strcmp(token, "gzip") == 0) {
+                    supports_gzip = 1;
+                    break;
+                }
+                token = strtok(NULL, ", ");
             }
         }
     }
