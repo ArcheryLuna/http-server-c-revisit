@@ -5,7 +5,6 @@
 #include <netinet/ip.h>
 #include <string.h>
 #include <errno.h>
-#include <time.h>
 #include <unistd.h>
 
 #define BUFFER_SIZE 1024
@@ -120,8 +119,9 @@ int main() {
 
     // Uncomment this block to pass the first stage
     //
-    int server_fd, client_addr_len, client_socket;
+    int server_fd, client_socket;
     struct sockaddr_in client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
     //
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == -1) {
@@ -161,7 +161,15 @@ int main() {
             continue;
         }
 
-        handle_client(client_socket);
+        if (fork() == 0) {
+            // Child process
+            close(server_fd);
+            handle_client(client_socket);
+            exit(0);
+        } else {
+            // Parent process
+            close(client_socket);
+        }
     }
 
     close(server_fd);
