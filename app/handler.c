@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
+#include <zlib.h>
 
 #define BUFFER_SIZE 1024
 
@@ -138,14 +139,28 @@ void handle_client(int client_socket) {
             int response_length;
 
             if (supports_gzip) {
+                // Compress the response body using gzip
+                uLong src_len = strlen(echo_string);
+                uLong dest_len = compressBound(src_len);
+                Bytef *compressed_data = (Bytef *)malloc(dest_len);
+                if (compress2(compressed_data, &dest_len, (const Bytef *)echo_string, src_len, Z_BEST_COMPRESSION) != Z_OK) {
+                    write(client_socket, BAD_REQUEST_RESPONSE, strlen(BAD_REQUEST_RESPONSE));
+                    free(compressed_data);
+                    close(client_socket);
+                    return;
+                }
+
                 response_length = snprintf(response, sizeof(response),
                                            "HTTP/1.1 200 OK\r\n"
                                            "Content-Type: text/plain\r\n"
                                            "Content-Encoding: gzip\r\n"
-                                           "Content-Length: %ld\r\n"
-                                           "\r\n"
-                                           "%s",
-                                           strlen(echo_string), echo_string);
+                                           "Content-Length: %lu\r\n"
+                                           "\r\n",
+                                           dest_len);
+
+                write(client_socket, response, response_length);
+                write(client_socket, compressed_data, dest_len);
+                free(compressed_data);
             } else {
                 response_length = snprintf(response, sizeof(response),
                                            "HTTP/1.1 200 OK\r\n"
@@ -154,9 +169,9 @@ void handle_client(int client_socket) {
                                            "\r\n"
                                            "%s",
                                            strlen(echo_string), echo_string);
-            }
 
-            write(client_socket, response, response_length);
+                write(client_socket, response, response_length);
+            }
         } else if (strcmp(path, "/user-agent") == 0) {
             // Handle /user-agent path
             char *user_agent_start = strstr(buffer, "User-Agent: ");
